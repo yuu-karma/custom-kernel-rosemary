@@ -1,0 +1,49 @@
+name: Build Kernel with KSU Non-GKI for Rosemary
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  build-kernel:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout kernel source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc build-essential flex bison openssl libssl-dev \
+            libncurses5-dev libncursesw5-dev libelf-dev dwarves curl
+
+      - name: Download & run KernelSU setup.sh
+        run: |
+          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
+
+      - name: Patch kernel config for KSU Non-GKI
+        run: |
+          chmod +x scripts/config || true
+          scripts/config --disable CONFIG_KPROBES
+          scripts/config --disable CONFIG_HAVE_KPROBES
+          scripts/config --disable CONFIG_KPROBE_EVENTS
+          scripts/config --enable CONFIG_KSU
+
+      - name: Run make olddefconfig
+        run: |
+          make olddefconfig
+
+      - name: Build kernel
+        run: |
+         export KCFLAGS="-Wno-error"
+          make KCFLAGS="-Wno-error=implicit-function-declaration -Wno-error" -j$(nproc)
+
+      - name: Show .config KSU related
+        run: |
+          grep KPROBES .config || true
+          grep KSU .config || true
+
+      
